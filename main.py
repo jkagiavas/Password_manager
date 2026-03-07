@@ -2,7 +2,7 @@ from tkinter import *
 from tkinter import messagebox
 from random import choice, randint, shuffle
 import pyperclip
-import json
+from database import Password, session
 import os
 from cryptography.fernet import Fernet
 
@@ -51,52 +51,33 @@ def save():
     website = website_entry.get()
     email = email_entry.get()
     password = pass_entry.get()
-    new_data = {
-        website: {
-            "email": email,
-            "password": encrypt(password),
-        }
-    }
 
     if len(website) == 0 or len(password) == 0:
         messagebox.showinfo(title="Oops", message="Please don't leave any fields empty")
     else:
-        try:
-            with open("data.json", mode='r') as data_file:
-                # Reading old data
-                data = json.load(data_file)
-        except FileNotFoundError:
-            with open("data.json", mode='w') as data_file:
-                # saving updated data
-                json.dump(new_data, data_file, indent=4)
-        else:
-            # updating old data with new
-            data.update(new_data)
+        new_entry = Password(
+            website=website,
+            email=email,
+            password=encrypt(password)
+        )
+        session.add(new_entry)
+        session.commit()
+        website_entry.delete(0, 'end')
+        pass_entry.delete(0, 'end')
+        website_entry.focus()
+        messagebox.showinfo(title="Success", message="Password saved successfully!")
 
-            with open("data.json", mode='w') as data_file:
-                # saving updated data
-                json.dump(data, data_file, indent=4)
-        finally:
-            website_entry.delete(0, 'end')
-            pass_entry.delete(0, 'end')
-            website_entry.focus()
 
 # ---------------------------- FIND PASSWORD ------------------------------- #
 def find_password():
     website = website_entry.get()
-    try:
-        with open("data.json", mode='r') as data_file:
-            data = json.load(data_file)
-    except FileNotFoundError:
-        messagebox.showwarning(title="ERROR", message="No data file found")
-    else:
-        if website in data:
-            email = data[website]['email']
-            password = decrypt(data[website]['password'])
-            messagebox.showinfo(title=website, message=f"email: {email}\n password:{password}")
+    result = session.query(Password).filter_by(website=website).first()
 
-        else:
-            messagebox.showinfo(title="Error", message="No details for the Website exist")
+    if result is None:
+        messagebox.showinfo(title="Error", message="No details for the website exist")
+    else:
+        decrypted_password = decrypt(result.password)
+        messagebox.showinfo(title=website, message=f"Email: {result.email}\nPassword: {decrypted_password}")
 
 # ---------------------------- UI SETUP ------------------------------- #
 window = Tk()
