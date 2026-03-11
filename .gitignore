@@ -2,3 +2,5 @@ data.json
 passwords.db
 .venv
 secret.key
+master.key
+__pycache__
