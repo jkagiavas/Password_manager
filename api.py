@@ -1,0 +1,91 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from database import Password, session
+from cryptography.fernet import Fernet
+import os
+from jose import jwt
+from datetime import datetime, timedelta
+from auth import verify_master_password
+
+# Secret key used to sign the JWT token - in production this goes in .env
+SECRET_KEY = "changethislater"
+ALGORITHM = "HS256"  # The signing algorithm - HS256 is the most common
+
+# This defines exactly what data we expect when saving a password
+# Pydantic will automatically validate incoming requests against this
+class PasswordEntry(BaseModel):
+    website: str
+    email: str
+    password: str
+
+#Create the FastAPI application instance
+app = FastAPI()
+
+@app.get("/")
+def home():
+    return {"message": "Password Manager API is running"}
+
+
+# Load the encryption key - same key as main.py so passwords are compatible
+KEY_FILE = "secret.key"
+with open(KEY_FILE, "rb") as f:
+    KEY = f.read()
+fernet = Fernet(KEY)
+
+
+@app.post("/passwords")
+def save_password(entry: PasswordEntry):
+    # Encrypt the password before saving to database
+    encrypted = fernet.encrypt(entry.password.encode()).decode()
+
+    # Create a new database entry
+    new_entry = Password(
+        website=entry.website,
+        email=entry.email,
+        password=encrypted
+    )
+    session.add(new_entry)
+    session.commit()
+
+    return {"message": "Password saved successfully"}
+
+
+@app.get("/passwords/{website}")
+def get_password(website: str):
+    # Query the database for the website
+    result = session.query(Password).filter_by(website=website).first()
+
+    if result is None:
+        # Return a 404 error if website not found
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    # Decrypt the password before returning it
+    decrypted = fernet.decrypt(result.password.encode()).decode()
+
+    return {
+        "website": result.website,
+        "email": result.email,
+        "password": decrypted
+    }
+
+
+@app.post("/login")
+def login(credentials: dict):
+    password = credentials.get("password")
+
+    # Verify master password using bcrypt from auth.py
+    if not verify_master_password(password):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # Create JWT token that expires in 30 minutes
+    expiration = datetime.utcnow() + timedelta(minutes=30)
+    token = jwt.encode(
+        {"sub": "master", "exp": expiration},
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+    return {"access_token": token}
+
