@@ -6,10 +6,26 @@ import os
 from jose import jwt
 from datetime import datetime, timedelta
 from auth import verify_master_password
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException
 
 # Secret key used to sign the JWT token - in production this goes in .env
 SECRET_KEY = "changethislater"
 ALGORITHM = "HS256"  # The signing algorithm - HS256 is the most common
+
+# oauth2_scheme automatically reads the JWT token from the Authorization header
+oauth2_scheme = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme)):
+    # Depends() tells FastAPI to run this function before the endpoint
+    # and inject the result as a parameter
+    token = credentials.credentials
+    try:
+        # Decode and verify the token using our secret key
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 # This defines exactly what data we expect when saving a password
 # Pydantic will automatically validate incoming requests against this
@@ -34,7 +50,7 @@ fernet = Fernet(KEY)
 
 
 @app.post("/passwords")
-def save_password(entry: PasswordEntry):
+def save_password(entry: PasswordEntry, token: dict = Depends(verify_token)):
     # Encrypt the password before saving to database
     encrypted = fernet.encrypt(entry.password.encode()).decode()
 
@@ -51,7 +67,7 @@ def save_password(entry: PasswordEntry):
 
 
 @app.get("/passwords/{website}")
-def get_password(website: str):
+def get_password(website: str, token: dict = Depends(verify_token)):
     # Query the database for the website
     result = session.query(Password).filter_by(website=website).first()
 
