@@ -2,45 +2,18 @@ from tkinter import *
 from tkinter import messagebox
 from random import choice, randint, shuffle
 import pyperclip
-import os
-from cryptography.fernet import Fernet
-
-# Import our database model and session from database.py
-from database import Password, session
+import requests
 
 # Import authentication functions from auth.py
 from auth import set_master_password, verify_master_password, master_password_exists
 
-# ---------------------------- ENCRYPTION SETUP ------------------------------- #
 
-# The file where the Fernet encryption key is stored locally
-KEY_FILE = "secret.key"
+# The base URL of our FastAPI backend
+API_URL = "http://127.0.0.1:8000"
 
-def load_or_create_key():
-    # If a key already exists, load it - we must use the same key every time
-    # A different key would make all previously saved passwords unreadable
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, "rb") as f:
-            return f.read()
-    else:
-        # First run - generate a new random key and save it
-        key = Fernet.generate_key()
-        with open(KEY_FILE, "wb") as f:
-            f.write(key)
-        return key
+# Token will be stored here after login - starts empty
+token = None
 
-# Load the key once at startup and create the Fernet instance
-KEY = load_or_create_key()
-fernet = Fernet(KEY)
-
-def encrypt(password):
-    # encode() converts string to bytes, Fernet encrypts it
-    # decode() converts the result back to string for database storage
-    return fernet.encrypt(password.encode()).decode()
-
-def decrypt(token):
-    # Reverse of encrypt - converts stored string back to readable password
-    return fernet.decrypt(token.encode()).decode()
 
 # ---------------------------- PASSWORD GENERATOR ------------------------------- #
 
@@ -77,41 +50,45 @@ def save():
     email = email_entry.get()
     password = pass_entry.get()
 
-    # Validate that required fields are not empty before saving
     if len(website) == 0 or len(password) == 0:
         messagebox.showinfo(title="Oops", message="Please don't leave any fields empty")
     else:
-        # Create a new database row with the password encrypted
-        # We never store plain text passwords in the database
-        new_entry = Password(
-            website=website,
-            email=email,
-            password=encrypt(password)
+        # Send the password data to the API with the JWT token in the header
+        response = requests.post(
+            f"{API_URL}/passwords",
+            json={"website": website, "email": email, "password": password},
+            headers={"Authorization": f"Bearer {token}"}
         )
-        # Add the new entry to the session and commit to save it permanently
-        session.add(new_entry)
-        session.commit()
+        if response.status_code == 200:
+            website_entry.delete(0, 'end')
+            pass_entry.delete(0, 'end')
+            website_entry.focus()
+            messagebox.showinfo(title="Success", message="Password saved successfully!")
+        else:
+            messagebox.showerror("Error", "Failed to save password")
 
-        # Clear the fields and focus back to website entry for next entry
-        website_entry.delete(0, 'end')
-        pass_entry.delete(0, 'end')
-        website_entry.focus()
-        messagebox.showinfo(title="Success", message="Password saved successfully!")
 
 # ---------------------------- FIND PASSWORD ------------------------------- #
 
 def find_password():
     website = website_entry.get()
 
-    # Query the database for the first entry matching the website name
-    result = session.query(Password).filter_by(website=website).first()
+    # Send a GET request to the API with the JWT token in the header
+    response = requests.get(
+        f"{API_URL}/passwords/{website}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
 
-    if result is None:
+    if response.status_code == 404:
         messagebox.showinfo(title="Error", message="No details for the website exist")
+    elif response.status_code == 200:
+        data = response.json()
+        messagebox.showinfo(
+            title=website,
+            message=f"Email: {data['email']}\nPassword: {data['password']}"
+        )
     else:
-        # Decrypt the password before displaying it to the user
-        decrypted_password = decrypt(result.password)
-        messagebox.showinfo(title=website, message=f"Email: {result.email}\nPassword: {decrypted_password}")
+        messagebox.showerror("Error", "Something went wrong")
 
 # ---------------------------- LOGIN SCREEN ------------------------------- #
 
@@ -132,13 +109,19 @@ def login_screen():
         password_entry.grid(row=1, column=0, pady=5)
 
         def check_password():
-            # verify_master_password() hashes the input and compares to stored hash
-            if verify_master_password(password_entry.get()):
+            global token
+            # Send login request to the API instead of checking locally
+            response = requests.post(
+                f"{API_URL}/login",
+                json={"password": password_entry.get()}
+            )
+            if response.status_code == 200:
+                # Store the token for future requests
+                token = response.json()["access_token"]
                 login.destroy()
                 open_main_app()
             else:
                 messagebox.showerror("Error", "Wrong password!")
-
         Button(login, text="Login", command=check_password).grid(row=2, column=0, pady=5)
 
     else:
