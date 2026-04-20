@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1B3A5C;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #1B3A5C;
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+
+        h2 {
+            color: #1B3A5C;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #2E75B6;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #2E75B6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #1B3A5C;
+        }
+
+        button.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background: #ddd;
+        }
+
+        .result {
+            background: #f0f7ff;
+            border: 1px solid #2E75B6;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .result p {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .tab.active {
+            color: #2E75B6;
+            border-bottom: 2px solid #2E75B6;
+            margin-bottom: -2px;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-size: 13px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Login Screen -->
+    <div class="container" id="login-screen">
+        <h1>🔐 Password Manager</h1>
+        <p class="subtitle">Enter your master password to continue</p>
+        <p class="error" id="login-error"></p>
+        <input type="password" id="master-password" placeholder="Master password" />
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Main App Screen -->
+    <div class="container" id="app-screen" style="display:none">
+        <h1>🔐 Password Manager</h1>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('add')">Add Password</div>
+            <div class="tab" onclick="showTab('search')">Search</div>
+        </div>
+
+        <!-- Add Password Tab -->
+        <div id="tab-add">
+            <input type="text" id="add-website" placeholder="Website (e.g. gmail.com)" />
+            <input type="text" id="add-email" placeholder="Email / Username" />
+            <input type="text" id="add-password" placeholder="Password" />
+            <button onclick="generatePassword()">Generate Password</button>
+            <button onclick="savePassword()">Save Password</button>
+            <p class="error" id="add-error"></p>
+        </div>
+
+        <!-- Search Tab -->
+        <div id="tab-search" style="display:none">
+            <input type="text" id="search-website" placeholder="Website (e.g. gmail.com)" />
+            <button onclick="searchPassword()">Search</button>
+            <p class="error" id="search-error"></p>
+            <div class="result" id="search-result">
+                <p><strong>Website:</strong> <span id="result-website"></span></p>
+                <p><strong>Email:</strong> <span id="result-email"></span></p>
+                <p><strong>Password:</strong> <span id="result-password"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // JWT token stored after login
+        let token = null;
+
+        // Switch between tabs
+        function showTab(tab) {
+            // Hide all tabs
+            document.getElementById("tab-add").style.display = "none";
+            document.getElementById("tab-search").style.display = "none";
+
+            // Remove active class from all tabs
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+            // Show selected tab
+            document.getElementById("tab-" + tab).style.display = "block";
+
+            // Mark correct tab as active
+            event.target.classList.add("active");
+        }
+
+        // Login function
+        async function login() {
+            const password = document.getElementById("master-password").value;
+
+            const response = await fetch("http://127.0.0.1:8000/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                token = data.access_token;
+                document.getElementById("login-screen").style.display = "none";
+                document.getElementById("app-screen").style.display = "block";
+            } else {
+                document.getElementById("login-error").textContent = "Wrong password. Try again.";
+            }
+        }
+
+        // Generate random password
+        function generatePassword() {
+            const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const numbers = "0123456789";
+            const symbols = "!#$%&()*+";
+            let password = "";
+            for (let i = 0; i < 8; i++) password += letters[Math.floor(Math.random() * letters.length)];
+            for (let i = 0; i < 2; i++) password += numbers[Math.floor(Math.random() * numbers.length)];
+            for (let i = 0; i < 2; i++) password += symbols[Math.floor(Math.random() * symbols.length)];
+            password = password.split("").sort(() => Math.random() - 0.5).join("");
+            document.getElementById("add-password").value = password;
+        }
+
+        // Save password
+        async function savePassword() {
+            const website = document.getElementById("add-website").value;
+            const email = document.getElementById("add-email").value;
+            const password = document.getElementById("add-password").value;
+
+            if (!website || !password) {
+                document.getElementById("add-error").textContent = "Website and password are required.";
+                return;
+            }
+
+            const response = await fetch("http://127.0.0.1:8000/passwords", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({ website, email, password })
+            });
+
+            if (response.ok) {
+                document.getElementById("add-website").value = "";
+                document.getElementById("add-email").value = "";
+                document.getElementById("add-password").value = "";
+                document.getElementById("add-error").textContent = "✅ Password saved!";
+            } else {
+                document.getElementById("add-error").textContent = "Failed to save. Try again.";
+            }
+        }
+
+        // Search password
+        async function searchPassword() {
+            const website = document.getElementById("search-website").value;
+
+            if (!website) {
+                document.getElementById("search-error").textContent = "Please enter a website.";
+                return;
+            }
+
+            const response = await fetch("http://127.0.0.1:8000/passwords/" + website, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById("result-website").textContent = data.website;
+                document.getElementById("result-email").textContent = data.email;
+                document.getElementById("result-password").textContent = data.password;
+                document.getElementById("search-result").style.display = "block";
+                document.getElementById("search-error").textContent = "";
+            } else {
+                document.getElementById("search-result").style.display = "none";
+                document.getElementById("search-error").textContent = "No password found for this website.";
+            }
+        }
+
+        // Allow pressing Enter to login
+        document.getElementById("master-password").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") login();
+        });
+    </script>
+
+</body>
+</html>

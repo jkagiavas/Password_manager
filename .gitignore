@@ -4,3 +4,4 @@ passwords.db
 secret.key
 master.key
 __pycache__
+.env

@@ -1,4 +1,4 @@
-#!/home/jkayabas/projects/day29_password/.venv/bin/python3.12
+#!/home/jkayabas/projects/day29_password/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

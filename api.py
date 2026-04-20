@@ -8,9 +8,11 @@ from datetime import datetime, timedelta
 from auth import verify_master_password
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException
-
-# Secret key used to sign the JWT token - in production this goes in .env
-SECRET_KEY = "changethislater"
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from dotenv import load_dotenv
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"  # The signing algorithm - HS256 is the most common
 
 # oauth2_scheme automatically reads the JWT token from the Authorization header
@@ -36,6 +38,13 @@ class PasswordEntry(BaseModel):
 
 #Create the FastAPI application instance
 app = FastAPI()
+# Serve static files from the static folder
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Serve the frontend at /app
+@app.get("/app")
+def frontend():
+    return FileResponse("static/index.html")
 
 @app.get("/")
 def home():
