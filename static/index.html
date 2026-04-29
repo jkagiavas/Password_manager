@@ -241,7 +241,7 @@
                 return;
             }
 
-            const response = await fetch("${API_URL}/passwords", {
+            const response = await fetch('${API_URL}/passwords', {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -269,7 +269,7 @@
                 return;
             }
 
-            const response = await fetch("${API_URL}/passwords/" + website, {
+            const response = await fetch('${API_URL}/passwords/' + website, {
                 headers: { "Authorization": "Bearer " + token }
             });
 
