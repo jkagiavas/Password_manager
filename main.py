@@ -9,7 +9,7 @@ from auth import set_master_password, verify_master_password, master_password_ex
 
 
 # The base URL of our FastAPI backend
-API_URL = "http://127.0.0.1:8000"
+API_URL = "http://91.98.80.47:8000"
 
 # Token will be stored here after login - starts empty
 token = None
