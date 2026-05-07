@@ -60,10 +60,12 @@ fernet = Fernet(KEY)
 
 @app.post("/passwords")
 def save_password(entry: PasswordEntry, token: dict = Depends(verify_token)):
-    # Encrypt the password before saving to database
-    encrypted = fernet.encrypt(entry.password.encode()).decode()
+    # Check if website already exists
+    existing = session.query(Password).filter_by(website=entry.website).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Website already exists. Use update instead.")
 
-    # Create a new database entry
+    encrypted = fernet.encrypt(entry.password.encode()).decode()
     new_entry = Password(
         website=entry.website,
         email=entry.email,
@@ -71,7 +73,6 @@ def save_password(entry: PasswordEntry, token: dict = Depends(verify_token)):
     )
     session.add(new_entry)
     session.commit()
-
     return {"message": "Password saved successfully"}
 
 

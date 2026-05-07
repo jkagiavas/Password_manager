@@ -256,9 +256,10 @@
                 document.getElementById("add-password").value = "";
                 document.getElementById("add-error").textContent = "✅ Password saved!";
             } else {
-                document.getElementById("add-error").textContent = "Failed to save. Try again.";
+                const data = await response.json();
+                document.getElementById("add-error").textContent = data.detail || "Failed to save.";
             }
-        }
+                    }
 
         // Search password
         async function searchPassword() {
