@@ -11,6 +11,10 @@ from fastapi import Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
+import redis
+
+# Σύνδεση στον Redis server (τρέχει τοπικά στην 6379)
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"  # The signing algorithm - HS256 is the most common
@@ -96,14 +100,36 @@ def get_password(website: str, token: dict = Depends(verify_token)):
     }
 
 
+
 @app.post("/login")
 def login(credentials: dict):
     password = credentials.get("password")
 
-    # Verify master password using bcrypt from auth.py
+    # --- RATE LIMITING ---
+    # Χρησιμοποιούμε ένα σταθερό key γιατί έχουμε έναν μόνο χρήστη (master).
+    # Σε multi-user θα ήταν π.χ. f"login_attempts:{username}" ή ανά IP.
+    rate_key = "login_attempts:master"
+
+    # Πόσες αποτυχημένες προσπάθειες υπάρχουν ήδη;
+    attempts = redis_client.get(rate_key)
+    if attempts and int(attempts) >= 5:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed attempts. Try again in 15 minutes."
+        )
+
+    # --- ΕΛΕΓΧΟΣ PASSWORD ---
     if not verify_master_password(password):
-        from fastapi import HTTPException
+        # Λάθος password → αύξησε τον μετρητή
+        redis_client.incr(rate_key)
+        # Βάλε expiration 15 λεπτά (μόνο την πρώτη φορά χρειάζεται,
+        # αλλά το ξαναβάζουμε για σιγουριά)
+        redis_client.expire(rate_key, 900)
         raise HTTPException(status_code=401, detail="Invalid password")
+
+    # --- ΕΠΙΤΥΧΙΑ ---
+    # Σωστό password → σβήσε τον μετρητή αποτυχιών
+    redis_client.delete(rate_key)
 
     # Create JWT token that expires in 30 minutes
     expiration = datetime.utcnow() + timedelta(minutes=30)
@@ -112,6 +138,4 @@ def login(credentials: dict):
         SECRET_KEY,
         algorithm=ALGORITHM
     )
-
     return {"access_token": token}
-
