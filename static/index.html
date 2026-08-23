@@ -203,18 +203,20 @@
         // Login function
         async function login() {
             const password = document.getElementById("master-password").value;
-
             const response = await fetch(`${API_URL}/api/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ password: password })
             });
-
             if (response.ok) {
                 const data = await response.json();
                 token = data.access_token;
                 document.getElementById("login-screen").style.display = "none";
                 document.getElementById("app-screen").style.display = "block";
+            } else if (response.status === 429) {
+                // Rate limited - πάρε το μήνυμα από το API
+                const data = await response.json();
+                document.getElementById("login-error").textContent = data.detail;
             } else {
                 document.getElementById("login-error").textContent = "Wrong password. Try again.";
             }

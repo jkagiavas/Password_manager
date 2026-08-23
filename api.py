@@ -113,9 +113,13 @@ def login(credentials: dict):
     # Πόσες αποτυχημένες προσπάθειες υπάρχουν ήδη;
     attempts = redis_client.get(rate_key)
     if attempts and int(attempts) >= 5:
+        # Πόσα δευτερόλεπτα μένουν μέχρι το ξεμπλοκάρισμα
+        ttl = redis_client.ttl(rate_key)
+        minutes = ttl // 60
+        seconds = ttl % 60
         raise HTTPException(
             status_code=429,
-            detail="Too many failed attempts. Try again in 15 minutes."
+            detail=f"Too many failed attempts. Try again in {minutes}m {seconds}s."
         )
 
     # --- ΕΛΕΓΧΟΣ PASSWORD ---
